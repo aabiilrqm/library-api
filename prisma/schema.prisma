@@ -9,3 +9,103 @@ generator client {
 datasource db {
   provider = "sqlite"
 }
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(USER)
+  loans     Loan[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model Book {
+  id             Int            @id @default(autoincrement())
+  title          String
+  isbn           String         @unique
+  publishedYear  Int
+  totalCopies    Int
+  availableCopies Int
+
+  authorId       Int
+  author         Author         @relation(fields: [authorId], references: [id])
+
+  categories     BookCategory[]
+  loans          Loan[]
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([title])
+  @@index([isbn])
+}
+
+model Author {
+  id        Int     @id @default(autoincrement())
+  name      String
+  bio       String?
+
+  books     Book[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Category {
+  id          Int            @id @default(autoincrement())
+  name        String         @unique
+  description String?
+
+  books       BookCategory[]
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([name])
+}
+
+model BookCategory {
+  bookId     Int
+  categoryId Int
+
+  book       Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, categoryId])
+}
+
+model Loan {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  bookId      Int
+  borrowedAt  DateTime @default(now())
+  dueAt       DateTime
+  returnedAt  DateTime?
+  status      LoanStatus @default(BORROWED)
+
+  user        User     @relation(fields: [userId], references: [id])
+  book        Book     @relation(fields: [bookId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([bookId])
+}
+
+enum LoanStatus {
+  BORROWED
+  RETURNED
+  OVERDUE
+}
