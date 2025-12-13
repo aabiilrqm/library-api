@@ -1,6 +1,6 @@
 // src/middleware/auth.middleware.js
 const { error } = require("../utils/response");
-const { verifyAccessToken } = require("../config/jwt");
+const { verifyAccessToken } = require("../utils/jwt");
 
 module.exports = async (req, res, next) => {
   try {

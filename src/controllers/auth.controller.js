@@ -1,7 +1,7 @@
 // src/controllers/auth.controller.js
 const bcrypt = require("bcrypt");
 const { success, error } = require("../utils/response");
-const { generateAccessToken, generateRefreshToken } = require("../utils/jwt");
+const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require("../utils/jwt");
 const prisma = require("../config/database");
 
 exports.register = async (req, res) => {
@@ -115,10 +115,56 @@ exports.login = async (req, res) => {
 };
 
 exports.refresh = async (req, res) => {
-  // Implementasi refresh token
-  return error(res, "Not implemented yet", 501);
-};
+  try {
+    const { refreshToken } = req.body;
 
+    if (!refreshToken) {
+      return error(res, "Refresh token required", 400);
+    }
+
+    const decoded = verifyRefreshToken(refreshToken);
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        name: true,
+      },
+    });
+
+    if (!user) {
+      return error(res, "User not found", 404);
+    }
+
+    const tokenPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    };
+
+    const newAccessToken = generateAccessToken(tokenPayload);
+    const newRefreshToken = generateRefreshToken(tokenPayload);
+
+    return success(res, "Token refreshed successfully", {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    console.error("REFRESH ERROR:", err);
+    if (err.message.includes("expired") || err.message.includes("invalid")) {
+      return error(res, "Invalid or expired refresh token", 401);
+    }
+    return error(res, "Internal server error", 500);
+  }
+};
 exports.me = async (req, res) => {
   try {
     // req.user sudah diisi oleh auth middleware

@@ -8,7 +8,9 @@
     "start": "node src/server.js",
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:generate": "npx prisma generate",
-    "prisma:seed": "npx prisma/seed.js"
+    "prisma:seed": "npx prisma/seed.js",
+    "prisma:studio": "prisma studio",
+    "db:reset": "npx prisma migrate reset && npm run prisma:seed"
   },
   "keywords": [],
   "author": "",
