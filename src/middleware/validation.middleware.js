@@ -1,4 +1,5 @@
 const { error } = require("../utils/response");
+const validate = require("./validate.middleware");
 
 module.exports = (schema) => {
   return (req, res, next) => {
@@ -11,3 +12,5 @@ module.exports = (schema) => {
     next();
   };
 };
+
+module.exports = validate;  
