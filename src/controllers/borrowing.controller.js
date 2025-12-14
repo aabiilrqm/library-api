@@ -1,9 +1,54 @@
 const prisma = require("../config/database");
 const { success, error } = require("../utils/response");
 
+exports.getAllBorrowings = async (req, res) => {
+  try {
+    console.log("📖 GET /api/borrowings called");
+    const borrowings = await prisma.borrowing.findMany({
+      orderBy: { borrowedAt: "desc" },
+      include: {
+        book: { select: { title: true, author: true } },
+        member: { select: { name: true, code: true } },
+      },
+    });
+    console.log(`📖 Found ${borrowings.length} borrowings`);
+    return success(res, "Borrowings retrieved successfully", { borrowings });
+  } catch (err) {
+    console.error("GET BORROWINGS ERROR:", err);
+    return error(res, "Internal server error", 500);
+  }
+};
+
+exports.getOverdueBorrowings = async (req, res) => {
+  try {
+    console.log("⚠️ GET /api/borrowings/overdue called");
+    const overdue = await prisma.borrowing.findMany({
+      where: { status: "OVERDUE" },
+      include: {
+        book: { select: { title: true, author: true } },
+        member: { select: { name: true, code: true, email: true } },
+      },
+    });
+    console.log(`⚠️ Found ${overdue.length} overdue borrowings`);
+    return success(res, "Overdue borrowings retrieved", { overdue });
+  } catch (err) {
+    console.error("GET OVERDUE ERROR:", err);
+    return error(res, "Internal server error", 500);
+  }
+};
+
 exports.borrowBook = async (req, res) => {
   try {
+    console.log("📖 POST /api/borrowings (borrow book) called");
     const { bookId, memberId, dueDate } = req.body;
+    const userId = req.user?.id; // From auth middleware
+
+    console.log("Request data:", { bookId, memberId, dueDate, userId });
+
+    // Validation
+    if (!bookId || !memberId || !dueDate) {
+      return error(res, "bookId, memberId, and dueDate are required", 400);
+    }
 
     // Check if book exists and is available
     const book = await prisma.book.findUnique({
@@ -31,7 +76,7 @@ exports.borrowBook = async (req, res) => {
       return error(res, "Member is not active", 400);
     }
 
-    // Check if member already has this book borrowed
+    // Check if member already has this book borrowed (not returned)
     const existingBorrowing = await prisma.borrowing.findFirst({
       where: {
         bookId: parseInt(bookId),
@@ -44,51 +89,35 @@ exports.borrowBook = async (req, res) => {
       return error(res, "Member already has this book borrowed", 400);
     }
 
-    // Start transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Create borrowing record
-      const borrowing = await tx.borrowing.create({
+    // Create borrowing record
+    const borrowing = await prisma.$transaction(async (tx) => {
+      // Create borrowing
+      const newBorrowing = await tx.borrowing.create({
         data: {
           bookId: parseInt(bookId),
           memberId: parseInt(memberId),
+          userId: userId || null,
           dueDate: new Date(dueDate),
           status: "BORROWED",
         },
         include: {
-          book: {
-            select: {
-              title: true,
-              author: true,
-              isbn: true,
-            },
-          },
-          member: {
-            select: {
-              code: true,
-              name: true,
-              email: true,
-            },
-          },
+          book: { select: { title: true, author: true } },
+          member: { select: { name: true, code: true } },
         },
       });
 
       // Update book availability
       await tx.book.update({
         where: { id: parseInt(bookId) },
-        data: {
-          available: { decrement: 1 },
-        },
+        data: { available: { decrement: 1 } },
       });
 
-      return borrowing;
+      return newBorrowing;
     });
 
-    return success(
-      res,
-      "Book borrowed successfully",
-      { borrowing: result },
-      201
-    );
+    console.log(`📖 Book borrowed successfully. Borrowing ID: ${borrowing.id}`);
+
+    return success(res, "Book borrowed successfully", { borrowing }, 201);
   } catch (err) {
     console.error("BORROW BOOK ERROR:", err);
     return error(res, "Internal server error", 500);
@@ -98,13 +127,12 @@ exports.borrowBook = async (req, res) => {
 exports.returnBook = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`📖 POST /api/borrowings/${id}/return called`);
 
     // Find borrowing record
     const borrowing = await prisma.borrowing.findUnique({
       where: { id: parseInt(id) },
-      include: {
-        book: true,
-      },
+      include: { book: true },
     });
 
     if (!borrowing) {
@@ -115,8 +143,9 @@ exports.returnBook = async (req, res) => {
       return error(res, "Book already returned", 400);
     }
 
-    // Update borrowing record
+    // Update borrowing and book availability
     const updatedBorrowing = await prisma.$transaction(async (tx) => {
+      // Update borrowing
       const borrowingUpdate = await tx.borrowing.update({
         where: { id: parseInt(id) },
         data: {
@@ -124,31 +153,21 @@ exports.returnBook = async (req, res) => {
           status: "RETURNED",
         },
         include: {
-          book: {
-            select: {
-              title: true,
-              author: true,
-            },
-          },
-          member: {
-            select: {
-              code: true,
-              name: true,
-            },
-          },
+          book: { select: { title: true, author: true } },
+          member: { select: { name: true, code: true } },
         },
       });
 
-      // Update book availability
+      // Return book to available stock
       await tx.book.update({
         where: { id: borrowing.bookId },
-        data: {
-          available: { increment: 1 },
-        },
+        data: { available: { increment: 1 } },
       });
 
       return borrowingUpdate;
     });
+
+    console.log(`📖 Book returned successfully. Borrowing ID: ${id}`);
 
     return success(res, "Book returned successfully", {
       borrowing: updatedBorrowing,
@@ -156,131 +175,5 @@ exports.returnBook = async (req, res) => {
   } catch (err) {
     console.error("RETURN BOOK ERROR:", err);
     return error(res, "Internal server error", 500);
-  }
-};
-
-exports.getAllBorrowings = async (req, res) => {
-  try {
-    const {
-      page = 1,
-      limit = 10,
-      status,
-      bookId,
-      memberId,
-      overdue,
-    } = req.query;
-
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    // Build filter
-    const filter = {};
-
-    if (status) filter.status = status;
-    if (bookId) filter.bookId = parseInt(bookId);
-    if (memberId) filter.memberId = parseInt(memberId);
-
-    if (overdue === "true") {
-      filter.AND = [{ status: "BORROWED" }, { dueDate: { lt: new Date() } }];
-    }
-
-    // Get total count
-    const total = await prisma.borrowing.count({ where: filter });
-
-    // Get borrowings
-    const borrowings = await prisma.borrowing.findMany({
-      where: filter,
-      skip,
-      take: limitNum,
-      orderBy: { borrowedAt: "desc" },
-      include: {
-        book: {
-          select: {
-            id: true,
-            title: true,
-            author: true,
-            isbn: true,
-          },
-        },
-        member: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    return success(res, "Borrowings retrieved successfully", {
-      borrowings,
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum),
-        hasNext: pageNum < Math.ceil(total / limitNum),
-        hasPrev: pageNum > 1,
-      },
-    });
-  } catch (err) {
-    console.error("GET ALL BORROWINGS ERROR:", err);
-    return error(res, "Internal server error", 500);
-  }
-};
-
-exports.getOverdueBorrowings = async (req, res) => {
-  try {
-    const overdueBorrowings = await prisma.borrowing.findMany({
-      where: {
-        status: "BORROWED",
-        dueDate: { lt: new Date() },
-      },
-      include: {
-        book: {
-          select: {
-            title: true,
-            author: true,
-            isbn: true,
-          },
-        },
-        member: {
-          select: {
-            code: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-      orderBy: { dueDate: "asc" },
-    });
-
-    return success(res, "Overdue borrowings retrieved", { overdueBorrowings });
-  } catch (err) {
-    console.error("GET OVERDUE BORROWINGS ERROR:", err);
-    return error(res, "Internal server error", 500);
-  }
-};
-
-exports.updateOverdueStatus = async () => {
-  try {
-    const now = new Date();
-
-    const result = await prisma.borrowing.updateMany({
-      where: {
-        status: "BORROWED",
-        dueDate: { lt: now },
-      },
-      data: {
-        status: "OVERDUE",
-      },
-    });
-
-    console.log(`Updated ${result.count} borrowings to OVERDUE status`);
-  } catch (err) {
-    console.error("UPDATE OVERDUE STATUS ERROR:", err);
   }
 };
