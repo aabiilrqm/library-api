@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,83 +7,90 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  USER
-  ADMIN
-}
-
-
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
   password  String
   name      String
-  role      String   @default("USER")
+  role      Role     @default(USER)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  loans Loan[]
+  
+  // Relations
+  borrowings Borrowing[]
+  
+  @@map("users")
 }
 
 model Book {
-  id          Int       @id @default(autoincrement())
+  id          Int        @id @default(autoincrement())
   title       String
-  authorId    Int
-  isbn        String?   @unique
+  author      String
+  isbn        String     @unique
+  category    String
   description String?
+  quantity    Int        @default(1)
+  available   Int        @default(1)
   publishedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  author    Author        @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  loans     Loan[]
-  categories BookCategory[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  // Relations
+  borrowings Borrowing[]
+  
+  @@map("books")
 }
 
-model Author {
+model Member {
   id        Int      @id @default(autoincrement())
+  code      String   @unique
   name      String
-  bio       String?
+  email     String?  @unique
+  phone     String?
+  address   String?
+  status    Status   @default(ACTIVE)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  books Book[]
+  
+  // Relations
+  borrowings Borrowing[]
+  
+  @@map("members")
 }
 
-model Category {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  books BookCategory[]
-}
-
-model BookCategory {
-  id         Int      @id @default(autoincrement())
+model Borrowing {
+  id         Int       @id @default(autoincrement())
   bookId     Int
-  categoryId Int
-  createdAt  DateTime @default(now())
-
-  book     Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-
-  @@unique([bookId, categoryId])
-}
-
-model Loan {
-  id         Int      @id @default(autoincrement())
-  bookId     Int
-  userId     Int
-  borrowedAt DateTime @default(now())
+  memberId   Int
+  borrowedAt DateTime  @default(now())
+  dueDate    DateTime
   returnedAt DateTime?
-  dueAt      DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  status     BorrowingStatus @default(BORROWED)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  
+  // Relations
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  @@map("borrowings")
+  @@unique([bookId, memberId, status], where: { status: BORROWED })
+}
 
-  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+enum Role {
+  USER
+  ADMIN
+}
 
-  @@index([userId])
-  @@index([bookId])
+enum Status {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum BorrowingStatus {
+  BORROWED
+  RETURNED
+  OVERDUE
+  LOST
 }
