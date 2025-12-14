@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("Starting database seeding...");
 
-  // Clear existing data
+  // Clear existing data (dalam urutan yang benar untuk foreign keys)
   console.log("Clearing existing data...");
   await prisma.borrowing.deleteMany({});
   await prisma.book.deleteMany({});
@@ -22,7 +22,7 @@ async function main() {
       email: "admin@library.com",
       password: adminPassword,
       name: "Library Admin",
-      role: "ADMIN",
+      role: "ADMIN", // String, bukan ENUM
     },
   });
 
@@ -34,7 +34,7 @@ async function main() {
         email: `user${i}@library.com`,
         password: password,
         name: `Regular User ${i}`,
-        role: "USER",
+        role: "USER", // String, bukan ENUM
       },
     });
     users.push(user);
@@ -110,7 +110,7 @@ async function main() {
       email: "john@example.com",
       phone: "081234567890",
       address: "123 Main Street",
-      status: "ACTIVE",
+      status: "ACTIVE", // String, bukan ENUM
     },
     {
       code: "M002",
@@ -158,24 +158,28 @@ async function main() {
     {
       bookId: createdBooks[0].id,
       memberId: createdMembers[0].id,
+      userId: admin.id, // Tambah userId
       dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-      status: "BORROWED",
+      status: "BORROWED", // String, bukan ENUM
     },
     {
       bookId: createdBooks[1].id,
       memberId: createdMembers[1].id,
+      userId: users[0].id, // Tambah userId
       dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
       status: "BORROWED",
     },
     {
       bookId: createdBooks[2].id,
       memberId: createdMembers[2].id,
+      userId: users[1].id, // Tambah userId
       dueDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago (overdue)
       status: "OVERDUE",
     },
     {
       bookId: createdBooks[3].id,
       memberId: createdMembers[0].id,
+      userId: users[2].id, // Tambah userId
       dueDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
       returnedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
       status: "RETURNED",
@@ -183,6 +187,7 @@ async function main() {
     {
       bookId: createdBooks[4].id,
       memberId: createdMembers[3].id,
+      userId: admin.id, // Tambah userId
       dueDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
       status: "LOST",
     },

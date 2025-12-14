@@ -12,11 +12,11 @@ model User {
   email     String   @unique
   password  String
   name      String
-  role      Role     @default(USER)
+  role      String   @default("USER")  // Ubah dari Role enum ke String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
-  // Relations
+  // Relations - FIX: tambah relasi ke Borrowing
   borrowings Borrowing[]
   
   @@map("users")
@@ -39,6 +39,8 @@ model Book {
   borrowings Borrowing[]
   
   @@map("books")
+  @@index([category])
+  @@index([author])
 }
 
 model Member {
@@ -48,7 +50,7 @@ model Member {
   email     String?  @unique
   phone     String?
   address   String?
-  status    Status   @default(ACTIVE)
+  status    String   @default("ACTIVE")  // Ubah dari Status enum ke String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
@@ -56,6 +58,8 @@ model Member {
   borrowings Borrowing[]
   
   @@map("members")
+  @@index([code])
+  @@index([status])
 }
 
 model Borrowing {
@@ -65,7 +69,12 @@ model Borrowing {
   borrowedAt DateTime  @default(now())
   dueDate    DateTime
   returnedAt DateTime?
-  status     BorrowingStatus @default(BORROWED)
+  status     String    @default("BORROWED")  // Ubah dari BorrowingStatus enum ke String
+  
+  // FIX: Tambah userId untuk relasi dengan User
+  userId     Int?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   
@@ -74,23 +83,9 @@ model Borrowing {
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
   
   @@map("borrowings")
-  @@unique([bookId, memberId, status], where: { status: BORROWED })
-}
-
-enum Role {
-  USER
-  ADMIN
-}
-
-enum Status {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
-
-enum BorrowingStatus {
-  BORROWED
-  RETURNED
-  OVERDUE
-  LOST
+  @@index([bookId])
+  @@index([memberId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([userId])
 }
