@@ -1,14 +1,24 @@
-// src/routes/auth.routes.js
 const router = require("express").Router();
 const authController = require("../controllers/auth.controller");
-const validate = require("../middleware/validation.middleware");
+const validate = require("../middleware/validation.middleware"); // Pastikan ini
 const authMiddleware = require("../middleware/auth.middleware");
 const roleMiddleware = require("../middleware/role.middleware");
 
 const { registerSchema, loginSchema } = require("../validators/auth.validator");
 
-// Public routes
-router.post("/register", validate(registerSchema), authController.register);
+// Public routes - TAMBAH DEBUG LOG
+router.post(
+  "/register",
+  (req, res, next) => {
+    console.log("📝 Register route called");
+    console.log("Request body:", req.body);
+    console.log("Register schema:", registerSchema);
+    next();
+  },
+  validate(registerSchema),
+  authController.register
+);
+
 router.post("/login", validate(loginSchema), authController.login);
 router.post("/refresh", authController.refresh);
 
