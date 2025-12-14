@@ -1,40 +1,31 @@
-// book.routes.js
-const router = require("express").Router();
-const bookController = require("../controllers/book.controller");
-const authMiddleware = require("../middleware/auth.middleware");
-const roleMiddleware = require("../middleware/role.middleware");
-const validate = require("../middleware/validate.middleware");
-const {
-  getBooksSchema,
-  createBookSchema,
-  updateBookSchema,
-} = require("../validators/book.validator");
+const router = require('express').Router();
+const bookController = require('../controllers/book.controller');
+const authMiddleware = require('../middleware/auth.middleware');
+const roleMiddleware = require('../middleware/role.middleware');
 
-// Public routes
-router.get("/", validate(getBooksSchema), bookController.getAllBooks);
-router.get("/:id", bookController.getBookById);
+// Public GET routes
+router.get('/', bookController.getAllBooks);
+router.get('/:id', bookController.getBookById);
 
-// Protected routes
+// Protected routes (Admin only)
 router.post(
-  "/",
+  '/',
   authMiddleware,
-  roleMiddleware("ADMIN"),
-  validate(createBookSchema),
+  roleMiddleware('ADMIN'),
   bookController.createBook
 );
 
 router.put(
-  "/:id",
+  '/:id',
   authMiddleware,
-  roleMiddleware("ADMIN"),
-  validate(updateBookSchema),
+  roleMiddleware('ADMIN'),
   bookController.updateBook
 );
 
 router.delete(
-  "/:id",
+  '/:id',
   authMiddleware,
-  roleMiddleware("ADMIN"),
+  roleMiddleware('ADMIN'),
   bookController.deleteBook
 );
 

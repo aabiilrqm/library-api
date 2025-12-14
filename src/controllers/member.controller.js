@@ -3,61 +3,12 @@ const { success, error } = require("../utils/response");
 
 exports.getAllMembers = async (req, res) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      search,
-      status,
-      sortBy = "name",
-      order = "asc",
-    } = req.query;
-
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    // Build filter
-    const filter = {};
-
-    if (search) {
-      filter.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { code: { contains: search, mode: "insensitive" } },
-        { email: { contains: search, mode: "insensitive" } },
-      ];
-    }
-
-    if (status) filter.status = status;
-
-    // Get total count
-    const total = await prisma.member.count({ where: filter });
-
-    // Get members
-    const members = await prisma.member.findMany({
-      where: filter,
-      skip,
-      take: limitNum,
-      orderBy: { [sortBy]: order.toLowerCase() },
-      include: {
-        _count: {
-          select: { borrowings: true },
-        },
-      },
-    });
-
-    return success(res, "Members retrieved successfully", {
-      members,
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum),
-        hasNext: pageNum < Math.ceil(total / limitNum),
-        hasPrev: pageNum > 1,
-      },
-    });
+    console.log("👥 GET /api/members called");
+    const members = await prisma.member.findMany({ orderBy: { id: "desc" } });
+    console.log(`👥 Found ${members.length} members`);
+    return success(res, "Members retrieved successfully", { members });
   } catch (err) {
-    console.error("GET ALL MEMBERS ERROR:", err);
+    console.error("GET MEMBERS ERROR:", err);
     return error(res, "Internal server error", 500);
   }
 };
@@ -65,70 +16,41 @@ exports.getAllMembers = async (req, res) => {
 exports.getMemberById = async (req, res) => {
   try {
     const { id } = req.params;
-
     const member = await prisma.member.findUnique({
       where: { id: parseInt(id) },
-      include: {
-        borrowings: {
-          include: {
-            book: {
-              select: {
-                id: true,
-                title: true,
-                author: true,
-                isbn: true,
-              },
-            },
-          },
-          orderBy: {
-            borrowedAt: "desc",
-          },
-        },
-      },
     });
-
-    if (!member) {
-      return error(res, "Member not found", 404);
-    }
-
+    if (!member) return error(res, "Member not found", 404);
     return success(res, "Member retrieved successfully", { member });
   } catch (err) {
-    console.error("GET MEMBER BY ID ERROR:", err);
+    console.error("GET MEMBER ERROR:", err);
     return error(res, "Internal server error", 500);
   }
 };
 
 exports.createMember = async (req, res) => {
   try {
+    console.log("👥 POST /api/members called");
     const { code, name, email, phone, address, status } = req.body;
 
-    // Check if code already exists
-    const existingMember = await prisma.member.findUnique({
-      where: { code },
-    });
+    if (!code || !name) return error(res, "Code and name are required", 400);
 
-    if (existingMember) {
-      return error(res, "Member with this code already exists", 409);
-    }
+    const existingMember = await prisma.member.findUnique({ where: { code } });
+    if (existingMember) return error(res, "Member code already exists", 409);
 
-    // Check if email already exists
     if (email) {
       const existingEmail = await prisma.member.findUnique({
         where: { email },
       });
-
-      if (existingEmail) {
-        return error(res, "Email already registered to another member", 409);
-      }
+      if (existingEmail) return error(res, "Email already exists", 409);
     }
 
     const member = await prisma.member.create({
       data: {
         code,
         name,
-        email,
-        phone,
-        address,
+        email: email || null,
+        phone: phone || null,
+        address: address || null,
         status: status || "ACTIVE",
       },
     });
@@ -136,6 +58,7 @@ exports.createMember = async (req, res) => {
     return success(res, "Member created successfully", { member }, 201);
   } catch (err) {
     console.error("CREATE MEMBER ERROR:", err);
+    if (err.code === "P2002") return error(res, "Duplicate value", 409);
     return error(res, "Internal server error", 500);
   }
 };
@@ -143,6 +66,8 @@ exports.createMember = async (req, res) => {
 exports.updateMember = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`👥 PUT /api/members/${id} called`);
+
     const { code, name, email, phone, address, status } = req.body;
 
     // Check if member exists
@@ -161,7 +86,7 @@ exports.updateMember = async (req, res) => {
       });
 
       if (memberWithCode) {
-        return error(res, "Code already exists for another member", 409);
+        return error(res, "Member code already exists", 409);
       }
     }
 
@@ -191,6 +116,7 @@ exports.updateMember = async (req, res) => {
     return success(res, "Member updated successfully", { member });
   } catch (err) {
     console.error("UPDATE MEMBER ERROR:", err);
+    if (err.code === "P2002") return error(res, "Duplicate value", 409);
     return error(res, "Internal server error", 500);
   }
 };
@@ -198,15 +124,11 @@ exports.updateMember = async (req, res) => {
 exports.deleteMember = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`👥 DELETE /api/members/${id} called`);
 
     // Check if member exists
     const existingMember = await prisma.member.findUnique({
       where: { id: parseInt(id) },
-      include: {
-        _count: {
-          select: { borrowings: true },
-        },
-      },
     });
 
     if (!existingMember) {
@@ -214,7 +136,14 @@ exports.deleteMember = async (req, res) => {
     }
 
     // Check if member has active borrowings
-    if (existingMember._count.borrowings > 0) {
+    const activeBorrowings = await prisma.borrowing.count({
+      where: {
+        memberId: parseInt(id),
+        status: { in: ["BORROWED", "OVERDUE"] },
+      },
+    });
+
+    if (activeBorrowings > 0) {
       return error(res, "Cannot delete member with active borrowings", 400);
     }
 
