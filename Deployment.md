@@ -1,128 +1,155 @@
-1. Repository GitHub
-URL: https://github.com/aabiilrqm/library-api.git
-Branch: main
+## 1. Repository
 
+* **GitHub URL**: [https://github.com/aabiilrqm/library-api.git](https://github.com/aabiilrqm/library-api.git)
+* **Branch**: `main`
 
-2. Production URLs
-Base URL: http://52.3.0.28
-Health Check Endpoint: GET http://52.3.0.28:4000/health
+---
 
+## 2. Production URLs
 
-3. AWS EC2 Instance Details
-Detail	Value
-Instance ID	i-xxxxxxxxxxxxxxxxx
-Instance Type	t3.micro (Free Tier Eligible)
-Public IPv4 Address	52.3.0.28
-Public IPv4 DNS	ec2-52-3-0-28.compute-1.amazonaws.com
-Region	us-east-1 (N. Virginia)
-Availability Zone	us-east-1a
-Operating System	Ubuntu Server 22.04 LTS
-AMI ID	ami-0ecb62995f68bb549
-Storage	8 GB gp3
-4. Deployment Steps
-A. EC2 Instance Setup
-Launch EC2 Instance:
+* **Base URL (Public)**: [http://52.3.0.28](http://52.3.0.28)
+* **Direct API (Internal)**: [http://127.0.0.1:4000](http://127.0.0.1:4000)
+* **Health Check**: `GET /health`
 
-AMI: Ubuntu Server 22.04 LTS
+Contoh:
 
-Instance Type: t3.micro
+```
+http://52.3.0.28/health
+```
 
-Key Pair: Create new key pair web-api.pem
+---
 
-Security Group: Configure inbound rules (see below)
+## 3. AWS EC2 Instance Details
 
-Storage: 8 GB gp3
+| Item          | Value                   |
+| ------------- | ----------------------- |
+| Instance Type | t3.micro (Free Tier)    |
+| OS            | Ubuntu Server 22.04 LTS |
+| Region        | us-east-1 (N. Virginia) |
+| Public IP     | 52.3.0.28               |
+| Storage       | 8 GB (gp3)              |
 
-Security Group Configuration (Inbound Rules):
+---
 
-text
-Type         | Port | Source        | Description
--------------|------|---------------|-------------
-SSH          | 22   | 0.0.0.0/0     | SSH Access
-HTTP         | 80   | 0.0.0.0/0     | Web Traffic
-Custom TCP   | 4000 | 0.0.0.0/0     | Node.js Application
-B. Server Environment Setup
-bash
-# Connect to EC2 instance
+## 4. EC2 & Security Group Setup
+
+### 4.1 Inbound Rules
+
+| Type       | Port | Source    | Description                    |
+| ---------- | ---- | --------- | ------------------------------ |
+| SSH        | 22   | 0.0.0.0/0 | SSH Access                     |
+| HTTP       | 80   | 0.0.0.0/0 | Web Traffic                    |
+| Custom TCP | 4000 | 0.0.0.0/0 | Node.js API (internal/testing) |
+
+> ⚠️ **Production Note**: Setelah NGINX aktif, port `4000` sebaiknya **ditutup** dari public.
+
+---
+
+## 5. Server Environment Setup
+
+```bash
+# Login ke server
 ssh -i "web-api.pem" ubuntu@52.3.0.28
 
-# Update system
+# Update sistem
 sudo apt update && sudo apt upgrade -y
 
 # Install Node.js 18.x
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# Install additional tools
+# Install tools
 sudo apt install -y git nginx
 sudo npm install -g pm2
-C. Application Deployment
-bash
-# Clone repository
+```
+
+---
+
+## 6. Application Deployment
+
+```bash
 cd ~
-git clone https://github.com/username/library-management-api.git
-cd library-management-api
 
-# Install dependencies
+git clone https://github.com/aabiilrqm/library-api.git
+cd library-api
+
 npm install --only=production
+```
 
-# Setup environment variables
+---
+
+## 7. Environment Variables
+
+Buat file `.env`:
+
+```bash
 cp .env.example .env
-nano .env  # Edit with production values
-5. Environment Variables Configuration
-env
-# Application
+nano .env
+```
+
+### Contoh `.env` (Production)
+
+```env
 NODE_ENV=production
 PORT=4000
 HOST=0.0.0.0
 
-# Database
 DATABASE_URL="file:./prod.db"
 
-# JWT Authentication
-JWT_SECRET=[32-character-strong-secret-here]
+JWT_SECRET=CHANGE_ME_32_CHARS
 JWT_EXPIRES_IN=15m
-JWT_REFRESH_SECRET=[32-character-strong-refresh-secret]
+JWT_REFRESH_SECRET=CHANGE_ME_32_CHARS_REFRESH
 JWT_REFRESH_EXPIRES_IN=7d
 
-# CORS (if applicable)
-CORS_ORIGIN=http://52.3.0.28:4000
-6. Database Setup
-bash
-# Generate Prisma client
+CORS_ORIGIN=http://52.3.0.28
+```
+
+> ❗ Jangan pernah commit `.env` ke repository.
+
+---
+
+## 8. Database Setup (Prisma)
+
+```bash
 npx prisma generate
-
-# Run database migrations
 npx prisma migrate deploy
-
-# Seed initial data
-npm run seed
-# or
 npx prisma db seed
-7. Application Startup with PM2
-bash
-# Start application
-pm2 start npm --name "library-api" -- start
+```
 
-# Configure PM2 to start on system boot
-pm2 startup
-# Run the generated command
-sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+---
+
+## 9. Run Application with PM2
+
+```bash
+pm2 start src/server.js --name library-api
+
 pm2 save
+pm2 startup
+```
 
-# Check application status
-pm2 status
-8. Nginx Configuration (Optional)
-bash
-# Create nginx config
+Jalankan command `sudo env PATH=...` yang ditampilkan oleh PM2, lalu:
+
+```bash
+pm2 save
+```
+
+---
+
+## 10. NGINX (Reverse Proxy)
+
+### 10.1 Config File
+
+```bash
 sudo nano /etc/nginx/sites-available/library-api
-nginx
+```
+
+```nginx
 server {
     listen 80;
     server_name 52.3.0.28;
 
     location / {
-        proxy_pass http://localhost:4000;
+        proxy_pass http://127.0.0.1:4000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -130,253 +157,102 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
     }
 }
-bash
-# Enable site
+```
+
+### 10.2 Enable & Reload
+
+```bash
 sudo ln -s /etc/nginx/sites-available/library-api /etc/nginx/sites-enabled/
 sudo rm /etc/nginx/sites-enabled/default
 
-# Test and restart nginx
 sudo nginx -t
-sudo systemctl restart nginx
-9. Verification Steps
-Test from within EC2:
-bash
-# Check if application is running
+sudo systemctl reload nginx
+```
+
+---
+
+## 11. Verification
+
+### 11.1 Internal Test
+
+```bash
 pm2 status
-
-# Check port listening
-sudo netstat -tlnp | grep :4000
-
-# Test health endpoint
-curl http://localhost:4000/api/health
-
-# Test API endpoint
-curl http://localhost:4000/api/books
-Test from local machine:
-bash
-# Test public accessibility
-curl http://52.3.0.28:4000/api/health
-
-# Test authentication
-curl -X POST http://52.3.0.28:4000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user1@library.com","password":"User1123!"}'
-Expected Health Check Response:
-json
-{
-  "success": true,
-  "message": "API is running",
-  "data": {
-    "status": "healthy",
-    "timestamp": "2025-12-14T09:45:30.123Z",
-    "uptime": "5 minutes",
-    "version": "1.0.0",
-    "environment": "production"
-  }
-}
-10. Test Credentials
-For testing purposes only:
-
-Admin Account:
-Email: admin@library.com
-
-Password: Admin123!
-
-Role: ADMIN
-
-Permissions: Full access to all resources
-
-Regular User Accounts:
-User 1:
-
-Email: user1@library.com
-
-Password: User1123!
-
-User 2:
-
-Email: user2@library.com
-
-Password: User2123!
-
-User 3:
-
-Email: user3@library.com
-
-Password: User3123!
-
-11. Troubleshooting Common Issues
-Issue 1: Application not accessible from public internet
-bash
-# Check Security Group rules
-aws ec2 describe-security-groups --group-ids sg-xxxxxx
-
-# Check application is binding to 0.0.0.0
-sudo netstat -tlnp | grep :4000
-# Should show: 0.0.0.0:4000
-
-# Check firewall
-sudo ufw status
-sudo ufw allow 4000
-Issue 2: Application crashes on startup
-bash
-# Check PM2 logs
-pm2 logs library-api --lines 100
-
-# Check for port conflicts
 sudo lsof -i :4000
+curl http://localhost:4000/api/health
+```
 
-# Check environment variables
-pm2 env library-api
-Issue 3: Database errors
-bash
-# Check database file
-ls -la *.db
+### 11.2 Public Test
 
-# Run Prisma diagnostics
-npx prisma diagnose
+```bash
+curl http://52.3.0.28/api/health
+```
 
-# Reset database (development only)
-npx prisma migrate reset
-Issue 4: Cannot SSH to instance
-Verify key pair permissions: chmod 400 web-api.pem
+---
 
-Check Security Group allows SSH (port 22)
+## 12. Test Credentials (Development Only)
 
-Verify instance is in running state
+### Admin
 
-Try using instance DNS instead of IP
+* Email: [admin@library.com](mailto:admin@library.com)
+* Password: Admin123!
 
-12. Monitoring
-Application Monitoring:
-bash
-# Check application status
+### Users
+
+* [user1@library.com](mailto:user1@library.com) / User1123!
+* [user2@library.com](mailto:user2@library.com) / User2123!
+* [user3@library.com](mailto:user3@library.com) / User3123!
+
+---
+
+## 13. Monitoring & Logs
+
+```bash
 pm2 status
-pm2 list
-
-# View application logs
 pm2 logs library-api
-pm2 logs library-api --lines 100  # Last 100 lines
-pm2 logs library-api --err        # Error logs only
-
-# Monitor resource usage
 pm2 monit
-System Monitoring:
-bash
-# Check system resources
-htop
-free -h
-df -h
+```
 
-# Check application process
-ps aux | grep node
+NGINX logs:
 
-# Check Nginx status
-sudo systemctl status nginx
+```bash
 sudo tail -f /var/log/nginx/access.log
 sudo tail -f /var/log/nginx/error.log
-13. Maintenance Procedures
-A. Application Updates
-bash
-# Connect to EC2
-ssh -i "web-api.pem" ubuntu@52.3.0.28
+```
 
-# Navigate to application directory
-cd ~/library-management-api
+---
 
-# Pull latest changes
+## 14. Maintenance
+
+### Update App
+
+```bash
 git pull origin main
-
-# Install new dependencies
 npm install --only=production
-
-# Run database migrations (if any)
 npx prisma migrate deploy
-
-# Restart application
 pm2 restart library-api
+```
 
-# Verify update
-pm2 status
-curl http://localhost:4000/api/health
-B. Database Backup
-bash
-# Create backup
-cp ~/library-management-api/prod.db ~/backups/prod-$(date +%Y%m%d).db
+### Backup Database
 
-# Restore from backup
-cp ~/backups/prod-20251214.db ~/library-management-api/prod.db
-pm2 restart library-api
-C. Log Management
-bash
-# Setup log rotation for PM2
-pm2 install pm2-logrotate
-pm2 set pm2-logrotate:max_size 10M
-pm2 set pm2-logrotate:retain 7
-pm2 set pm2-logrotate:compress true
+```bash
+cp prod.db ~/backups/prod-$(date +%Y%m%d).db
+```
 
-# Clear application logs
-pm2 flush library-api
-D. Security Updates
-bash
-# Update system packages
-sudo apt update
-sudo apt upgrade -y
+---
 
-# Update Node.js dependencies
-cd ~/library-management-api
-npm audit fix
+## 15. Security Notes
 
-# Restart after updates
-pm2 restart library-api
-14. Notes
-Important Security Notes:
-Never commit .env file to version control
+* Gunakan HTTPS (Certbot) untuk production
+* Batasi SSH hanya IP tertentu
+* Tutup port 4000 dari public SG
+* Rotasi JWT secret secara berkala
 
-Rotate JWT secrets periodically in production
+---
 
-Restrict Security Group to specific IPs for SSH access
+## ✅ Status
 
-Use HTTPS for production (requires SSL certificate)
+**Production Ready** ✔️
 
-Regularly update dependencies and system packages
-
-Free Tier Considerations:
-t3.micro instance has 1 GB RAM
-
-Monitor CPU credits for consistent performance
-
-Consider upgrading instance type if traffic increases
-
-Support:
-For issues with this deployment, contact:
-
-AWS Support: AWS Academy Learner Lab
-
-Application Issues: Repository maintainer
-
-Last Updated: December 14, 2025
-Maintainer: [Your Name]
-Status: ✅ Production Ready
-
-Quick Reference Commands
-bash
-# Start/Stop/Restart
-pm2 start library-api
-pm2 stop library-api
-pm2 restart library-api
-
-# Monitoring
-pm2 logs library-api
-pm2 status
-
-# Database
-npx prisma migrate deploy
-npx prisma generate
-
-# System
-sudo systemctl restart nginx
-sudo ufw status
+*Last updated: 14 December 2025*
