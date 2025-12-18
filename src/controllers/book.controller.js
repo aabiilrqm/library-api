@@ -142,7 +142,7 @@ exports.deleteBook = async (req, res) => {
       where: { id: parseInt(id) },
     });
 
-    return success(res, "Book deleted successfully", null, 204);
+    return success(res, "Book deleted successfully",200);
   } catch (err) {
     console.error("DELETE BOOK ERROR:", err);
     return error(res, "Internal server error", 500);

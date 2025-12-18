@@ -151,7 +151,7 @@ exports.deleteMember = async (req, res) => {
       where: { id: parseInt(id) },
     });
 
-    return success(res, "Member deleted successfully", null, 204);
+    return success(res, "Member deleted successfully", 200);
   } catch (err) {
     console.error("DELETE MEMBER ERROR:", err);
     return error(res, "Internal server error", 500);
