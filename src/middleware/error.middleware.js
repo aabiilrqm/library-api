@@ -12,7 +12,6 @@ module.exports = (err, req, res, next) => {
     userId: req.user ? req.user.id : "anonymous",
   });
 
-  // Prisma errors
   if (err.code === "P2002") {
     return error(res, "Duplicate value entered", 409);
   }
@@ -25,7 +24,6 @@ module.exports = (err, req, res, next) => {
     return error(res, "Foreign key constraint failed", 400);
   }
 
-  // JWT errors
   if (err.name === "JsonWebTokenError") {
     return error(res, "Invalid token", 401);
   }
@@ -34,12 +32,10 @@ module.exports = (err, req, res, next) => {
     return error(res, "Token expired", 401);
   }
 
-  // Validation errors
   if (err.name === "ValidationError") {
     return error(res, "Validation failed", 400, err.errors);
   }
 
-  // Custom error messages
   if (err.message && err.message.includes("already exists")) {
     return error(res, err.message, 409);
   }
@@ -48,7 +44,6 @@ module.exports = (err, req, res, next) => {
     return error(res, err.message, 404);
   }
 
-  // Default error
   const statusCode = err.statusCode || 500;
   const message =
     process.env.NODE_ENV === "production"
