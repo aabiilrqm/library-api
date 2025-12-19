@@ -1,12 +1,11 @@
 const router = require("express").Router();
 const authController = require("../controllers/auth.controller");
-const validate = require("../middleware/validation.middleware"); // Pastikan ini
+const validate = require("../middleware/validation.middleware"); 
 const authMiddleware = require("../middleware/auth.middleware");
 const roleMiddleware = require("../middleware/role.middleware");
 
 const { registerSchema, loginSchema } = require("../validators/auth.validator");
 
-// Public routes - TAMBAH DEBUG LOG
 router.post(
   "/register",
   (req, res, next) => {

@@ -8,7 +8,6 @@ exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    // Cek apakah email sudah terdaftar
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -17,20 +16,17 @@ exports.register = async (req, res) => {
       return error(res, "Email already registered", 409);
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Buat user baru
     const user = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
-        role: "USER", // default role
+        role: "USER", 
       },
     });
 
-    // Generate tokens (tanpa password di payload)
     const tokenPayload = {
       id: user.id,
       email: user.email,
@@ -40,7 +36,6 @@ exports.register = async (req, res) => {
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken(tokenPayload);
 
-    // Return response tanpa password
     const userResponse = {
       id: user.id,
       name: user.name,
